@@ -1,0 +1,9 @@
+[package]
+name = "Farol"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ureq = { version = "3.3.0", default-features = false, features = ["json", "gzip", "rustls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
