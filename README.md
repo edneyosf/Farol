@@ -32,6 +32,9 @@ You can configure the script using environment variables:
 export CF_API_TOKEN="your_token_here"
 export CF_ZONE_ID="your_zone_id"
 export CF_RECORD_NAME="home.yourdomain.com"
+export CF_RECORD_TYPE="A"
+export CF_PROXIED="false"
+export CF_TTL="1"
 
 ./target/release/Farol
 ```
@@ -54,21 +57,14 @@ Use `--proxied` if you want the record to go through Cloudflare’s proxy (orang
 You can run the script periodically with cron. For example, to check your IP every 5 minutes:
 
 ```cron
-*/5 * * * * CF_API_TOKEN=xxx CF_ZONE_ID=xxx CF_RECORD_NAME=home.yourdomain.com /path/to/Farol >> /var/log/farol.log 2>&1
+*/15 * * * * CF_API_TOKEN=xxx CF_ZONE_ID=xxx CF_RECORD_NAME=home.yourdomain.com /path/to/Farol >> /var/log/farol.log 2>&1
 ```
 
 The script only sends a `PATCH` request to Cloudflare when the IP has actually changed, so it is safe to run frequently.
 
 ## How it works
 
-1. Queries `https://api.ipify.org` to determine the current public IP address.
+1. Queries `https://api.ipify.org`/`https://4.icanhazip.com` to determine the current public IP address.
 2. Checks Cloudflare for an existing DNS record matching the configured name and type.
 3. If the record exists and already points to the current IP, nothing is changed.
 4. If the record exists but is outdated, it is updated with a `PATCH` request.
-5. If the record does not exist, it is created with a `POST` request.
-
-## Notes about `Cargo.toml`
-
-This build environment uses an older Rust toolchain (`1.75`), so the `Cargo.toml` pins some transitive dependencies (`idna_adapter` and `openssl-sys`) to versions compatible with it.
-
-If you are building with a newer Rust version (`1.80+`), you can safely remove those pinned dependency lines.

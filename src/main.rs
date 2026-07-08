@@ -2,7 +2,7 @@ mod args;
 mod ip;
 mod cloudflare;
 
-use crate::cloudflare::{create_dns_record, find_dns_record, update_dns_record};
+use crate::cloudflare::{find_dns_record, update_dns_record, CfDnsRecord};
 use crate::{args::Args, ip::get_public_ip};
 
 ///   CF_API_TOKEN   - Cloudflare API token (requires Zone.DNS:Edit permission) [--api-token]
@@ -14,34 +14,34 @@ use crate::{args::Args, ip::get_public_ip};
 
 fn main() -> Result<(), String> {
     let args = Args::parse()?;
-    let current_ip = get_public_ip()?;
 
-    println!("Current public IP: {current_ip}");
-
-    match find_dns_record(&args)? {
-        Some(record) if record.content == current_ip => {
-            println!(
-                "Registro '{}' já aponta para {}. Nada a fazer.",
-                record.name, current_ip
-            );
+    match get_public_ip() {
+        Some(ip) => {
+            println!("Current public IP: {ip}"); 
+        
+            match find_dns_record(&args)? {
+                Some(record) if record.content == ip => already_updated(&record.name, &ip),
+                Some(record) => update(&args, &record, &ip)?,
+                None => eprintln!("No record '{}' found", args.record_name)
+            }       
         }
-        Some(record) => {
-            println!(
-                "Registro '{}' aponta para {} (desatualizado). Atualizando para {}...",
-                record.name, record.content, current_ip
-            );
-            update_dns_record(&args, &record.id, &current_ip)?;
-            println!("Registro atualizado com sucesso.");
-        }
-        None => {
-            println!(
-                "Nenhum registro '{}' encontrado. Criando novo registro apontando para {}...",
-                args.record_name, current_ip
-            );
-            create_dns_record(&args, &current_ip)?;
-            println!("Registro criado com sucesso.");
-        }
+        None => eprintln!("No IP found")
     }
+
+    Ok(())
+}
+
+fn already_updated(record: &str, ip: &str) {
+    println!("Record '{record}' already points to {ip}");
+}
+
+fn update(args: &Args, record: &CfDnsRecord, ip: &str) -> Result<(), String> {
+    let name = &record.name;
+    let content = &record.content;
+    
+    println!("Record '{name}' points to {content} (outdated). Updating to {ip}...");
+    update_dns_record(args, &record.id, ip)?;
+    println!("Record successfully updated");
 
     Ok(())
 }

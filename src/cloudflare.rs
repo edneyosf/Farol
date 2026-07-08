@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 use crate::args::Args;
 
+const URL: &str = "https://api.cloudflare.com/client/v4/zones";
+const AUTHORIZATION_HEADER: &str = "Authorization";
+
 #[derive(Deserialize, Debug)]
-struct CfListResponse {
+struct CfFindResponse {
     success: bool,
     result: Vec<CfDnsRecord>,
     #[serde(default)]
@@ -10,7 +13,7 @@ struct CfListResponse {
 }
 
 #[derive(Deserialize, Debug)]
-struct CfMutateResponse {
+struct CfUpdateResponse {
     success: bool,
     #[serde(default)]
     errors: Vec<CfError>,
@@ -40,59 +43,28 @@ struct CfUpsertBody<'a> {
 }
 
 pub fn find_dns_record(args: &Args) -> Result<Option<CfDnsRecord>, String> {
-    let url = format!(
-        "https://api.cloudflare.com/client/v4/zones/{}/dns_records?type={}&name={}",
-        args.zone_id, args.record_type, args.record_name
-    );
-
-    let resp: CfListResponse = ureq::get(&url)
-        .header("Authorization", &format!("Bearer {}", args.api_token)) // Mudou de .set() para .header()
+    let base_url = get_url(&args.zone_id);
+    let record_type = &args.record_type;
+    let name = &args.record_name;
+    let url = format!("{base_url}?type={record_type}&name={name}");
+    let resp: CfFindResponse = ureq::get(&url)
+        .header(AUTHORIZATION_HEADER, &get_authorization(&args.api_token))
         .call()
-        .map_err(|e| format!("falha na requisição à Cloudflare: {e}"))?
+        .map_err(|e| e.to_string())?
         .body_mut()
         .read_json()
-        .map_err(|e| format!("falha ao interpretar resposta da Cloudflare: {e}"))?;
+        .map_err(|e| e.to_string())?;
 
     if !resp.success {
-        return Err(format_cf_errors(&resp.errors));
+        return Err(to_string(&resp.errors));
     }
 
     Ok(resp.result.into_iter().next())
 }
 
-pub fn create_dns_record(args: &Args, ip: &str) -> Result<(), String> {
-    let url = format!(
-        "https://api.cloudflare.com/client/v4/zones/{}/dns_records",
-        args.zone_id
-    );
-
-    let body = CfUpsertBody {
-        record_type: &args.record_type,
-        name: &args.record_name,
-        content: ip,
-        ttl: args.ttl,
-        proxied: args.proxied,
-    };
-
-    let resp: CfMutateResponse = ureq::post(&url)
-        .header("Authorization", &format!("Bearer {}", args.api_token)) // Mudou de .set() para .header()
-        .send_json(&body)
-        .map_err(|e| format!("falha na requisição de criação: {e}"))?
-        .body_mut()
-        .read_json()
-        .map_err(|e| format!("falha ao interpretar resposta de criação: {e}"))?;
-
-    if !resp.success {
-        return Err(format_cf_errors(&resp.errors));
-    }
-    Ok(())
-}
-
 pub fn update_dns_record(args: &Args, record_id: &str, ip: &str) -> Result<(), String> {
-    let url = format!(
-        "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
-        args.zone_id, record_id
-    );
+    let base_url = get_url(&args.zone_id);
+    let url = format!("{base_url}/{record_id}");
 
     let body = CfUpsertBody {
         record_type: &args.record_type,
@@ -102,24 +74,34 @@ pub fn update_dns_record(args: &Args, record_id: &str, ip: &str) -> Result<(), S
         proxied: args.proxied,
     };
 
-    let resp: CfMutateResponse = ureq::patch(&url)
-        .header("Authorization", &format!("Bearer {}", args.api_token)) // Mudou de .set() para .header()
+    let resp: CfUpdateResponse = ureq::patch(&url)
+        .header(AUTHORIZATION_HEADER, &get_authorization(&args.api_token))
         .send_json(&body)
-        .map_err(|e| format!("falha na requisição de atualização: {e}"))?
+        .map_err(|e| e.to_string())?
         .body_mut()
         .read_json()
-        .map_err(|e| format!("falha ao interpretar resposta de atualização: {e}"))?;
+        .map_err(|e| e.to_string())?;
 
     if !resp.success {
-        return Err(format_cf_errors(&resp.errors));
+        return Err(to_string(&resp.errors));
     }
+    
     Ok(())
 }
 
-fn format_cf_errors(errors: &[CfError]) -> String {
+fn get_url(zone_id: &str) -> String {
+    format!("{URL}/{zone_id}/dns_records")
+}
+
+fn get_authorization(api_token: &str) -> String {
+    format!("Bearer {api_token}")
+}
+
+fn to_string(errors: &[CfError]) -> String {
     if errors.is_empty() {
-        return "a API da Cloudflare retornou success=false sem detalhes".to_string();
+        return "Unknown".to_string();
     }
+    
     errors
         .iter()
         .map(|e| format!("[{}] {}", e.code, e.message))
