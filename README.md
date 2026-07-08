@@ -1,6 +1,6 @@
 # Farol
 
-A simple Rust script that checks your current public IP address and updates (or creates) a Cloudflare `A` DNS record, working as a lightweight DDNS client.
+A simple Rust script that checks your current public IP address and updates a Cloudflare `A` DNS record, working as a lightweight DDNS client.
 
 ## Usage
 
