@@ -54,7 +54,7 @@ Use `--proxied` if you want the record to go through Cloudflare’s proxy (orang
 
 ### 5. Automate it
 
-You can run the script periodically with cron. For example, to check your IP every 5 minutes:
+You can run the script periodically with cron. For example, to check your IP every 15 minutes:
 
 ```cron
 */15 * * * * CF_API_TOKEN=xxx CF_ZONE_ID=xxx CF_RECORD_NAME=home.yourdomain.com /path/to/Farol >> /var/log/farol.log 2>&1
